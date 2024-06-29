@@ -55,7 +55,6 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
     switch (dataSource.sourceType) {
       case DataSourceType.network:
         uri = dataSource.uri ?? '';
-        break;
       case DataSourceType.asset:
         String assetUrl = dataSource.asset!;
         if (dataSource.package != null && dataSource.package!.isNotEmpty) {
@@ -63,7 +62,6 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
         }
         assetUrl = ui.webOnlyAssetManager.getAssetUrl(assetUrl);
         uri = assetUrl;
-        break;
       case DataSourceType.file:
         return Future<int>.error(UnimplementedError(
             'web implementation of video_player cannot play local files'));
@@ -87,8 +85,16 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
     _proxyVideoElements[textureId] = [];
 
     // Listen to the main video element for synchronization
-    videoElement.onTimeUpdate.listen((event) {
+    videoElement.onTimeUpdate.listen((Event event) {
       _syncProxyVideos(textureId);
+    });
+
+    videoElement.onPlay.listen((Event event) {
+      _syncPlayPauseState(textureId);
+    });
+
+    videoElement.onPause.listen((Event event) {
+      _syncPlayPauseState(textureId);
     });
 
     // Register the main video element
@@ -119,11 +125,7 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
         _proxyVideoElements[textureId]!.add(proxyVideoElement);
 
         // Synchronize the state of the proxy element
-        if (videoElement.paused) {
-          proxyVideoElement.pause();
-        } else {
-          proxyVideoElement.play().catchError((Object e) {});
-        }
+        _syncPlayPauseState(textureId);
 
         player.addProxyVideoElement(proxyVideoElement);
         return proxyVideoElement;
@@ -138,10 +140,19 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
     final VideoElement mainVideoElement = player.videoElement;
     final List<VideoElement> proxies = _proxyVideoElements[textureId] ?? [];
 
-    for (final proxy in proxies) {
+    for (final VideoElement proxy in proxies) {
       if ((proxy.currentTime - mainVideoElement.currentTime).abs() > 0.1) {
         proxy.currentTime = mainVideoElement.currentTime;
       }
+    }
+  }
+
+  void _syncPlayPauseState(int textureId) {
+    final VideoPlayer player = _player(textureId);
+    final VideoElement mainVideoElement = player.videoElement;
+    final List<VideoElement> proxies = _proxyVideoElements[textureId] ?? [];
+
+    for (final VideoElement proxy in proxies) {
       if (mainVideoElement.paused && !proxy.paused) {
         proxy.pause();
       } else if (!mainVideoElement.paused && proxy.paused) {
