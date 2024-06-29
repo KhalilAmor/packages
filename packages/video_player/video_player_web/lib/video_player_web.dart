@@ -104,7 +104,7 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
           ..controls = videoElement.controls
           ..loop = videoElement.loop
           ..muted = videoElement.muted
-          ..volume = videoElement.volume
+          ..volume = 0.0
           ..playbackRate = videoElement.playbackRate
           ..currentTime = videoElement.currentTime
           ..setAttribute('playsinline', 'true')
