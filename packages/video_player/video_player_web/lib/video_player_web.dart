@@ -1,7 +1,3 @@
-// Copyright 2013 The Flutter Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
 import 'dart:async';
 import 'dart:html';
 
@@ -23,6 +19,9 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
 
   // Map of textureId -> VideoPlayer instances
   final Map<int, VideoPlayer> _videoPlayers = <int, VideoPlayer>{};
+  // Map of textureId -> list of proxy VideoElements
+  final Map<int, List<VideoElement>> _proxyVideoElements =
+      <int, List<VideoElement>>{};
 
   // Simulate the native "textureId".
   int _textureCounter = 1;
@@ -36,6 +35,7 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
   Future<void> dispose(int textureId) async {
     _player(textureId).dispose();
     _videoPlayers.remove(textureId);
+    _proxyVideoElements.remove(textureId);
     return;
   }
 
@@ -44,6 +44,7 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
       videoPlayer.dispose();
     }
     _videoPlayers.clear();
+    _proxyVideoElements.clear();
   }
 
   @override
@@ -53,8 +54,6 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
     late String uri;
     switch (dataSource.sourceType) {
       case DataSourceType.network:
-        // Do NOT modify the incoming uri, it can be a Blob, and Safari doesn't
-        // like blobs that have changed.
         uri = dataSource.uri ?? '';
         break;
       case DataSourceType.asset:
@@ -78,12 +77,21 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
       ..src = uri
       ..style.border = 'none'
       ..style.height = '100%'
-      ..style.width = '100%';
+      ..style.width = '100%'
+      ..autoplay = false;
 
     final VideoPlayer player = VideoPlayer(videoElement: videoElement)
       ..initialize();
 
-    // TODO(hterkelsen): Use initialization parameters once they are available
+    _videoPlayers[textureId] = player;
+    _proxyVideoElements[textureId] = [];
+
+    // Listen to the main video element for synchronization
+    videoElement.onTimeUpdate.listen((event) {
+      _syncProxyVideos(textureId);
+    });
+
+    // Register the main video element
     ui.platformViewRegistry.registerViewFactory(
       'videoPlayer-$textureId',
       (int viewId) {
@@ -91,25 +99,26 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
           return videoElement;
         }
 
-        // final VideoElement proxyVideoElement =
-        //     videoElement.clone(true) as VideoElement;
-
+        // Creating the proxy video element
         final VideoElement proxyVideoElement = VideoElement()
           ..src = videoElement.src
           ..id = 'videoElement-$textureId-proxy-$viewId'
           ..style.border = videoElement.style.border
           ..style.height = videoElement.style.height
           ..style.width = videoElement.style.width
-          ..autoplay = videoElement.autoplay
+          ..autoplay = false
           ..controls = videoElement.controls
           ..loop = videoElement.loop
-          ..muted = videoElement.muted
-          ..volume = 0.0
+          ..muted = true // Mute the proxy element
+          ..volume = 0.0 // Ensure volume is set to 0
           ..playbackRate = videoElement.playbackRate
           ..currentTime = videoElement.currentTime
-          ..setAttribute('playsinline', 'true')
-          ..setAttribute('autoplay', 'false');
+          ..setAttribute('playsinline', 'true');
 
+        // Add the proxy element to the list
+        _proxyVideoElements[textureId]!.add(proxyVideoElement);
+
+        // Synchronize the state of the proxy element
         if (videoElement.paused) {
           proxyVideoElement.pause();
         } else {
@@ -121,9 +130,24 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
       },
     );
 
-    _videoPlayers[textureId] = player;
-
     return textureId;
+  }
+
+  void _syncProxyVideos(int textureId) {
+    final VideoPlayer player = _player(textureId);
+    final VideoElement mainVideoElement = player.videoElement;
+    final List<VideoElement> proxies = _proxyVideoElements[textureId] ?? [];
+
+    for (final proxy in proxies) {
+      if ((proxy.currentTime - mainVideoElement.currentTime).abs() > 0.1) {
+        proxy.currentTime = mainVideoElement.currentTime;
+      }
+      if (mainVideoElement.paused && !proxy.paused) {
+        proxy.pause();
+      } else if (!mainVideoElement.paused && proxy.paused) {
+        proxy.play().catchError((Object e) {});
+      }
+    }
   }
 
   @override
@@ -177,7 +201,6 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
     return HtmlElementView(viewType: 'videoPlayer-$textureId');
   }
 
-  /// Sets the audio mode to mix with other sources (ignored)
   @override
   Future<void> setMixWithOthers(bool mixWithOthers) => Future<void>.value();
 }

@@ -127,6 +127,9 @@ class VideoPlayer {
     });
   }
 
+  // ignore: public_member_api_docs
+  html.VideoElement get videoElement => _videoElement;
+
   /// Attempts to play the video.
   ///
   /// If this method is called programmatically (without user interaction), it
