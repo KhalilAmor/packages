@@ -151,10 +151,11 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
   void _syncProxyVideos(int textureId) {
     final VideoPlayer player = _player(textureId);
     final VideoElement mainVideoElement = player.videoElement;
-    final List<VideoElement> proxies = _proxyVideoElements[textureId] ?? [];
+    final List<VideoElement> proxies =
+        _proxyVideoElements[textureId] ?? <VideoElement>[];
 
-    for (final proxy in proxies) {
-      if ((proxy.currentTime - mainVideoElement.currentTime).abs() > 0.01) {
+    for (final VideoElement proxy in proxies) {
+      if ((proxy.currentTime - mainVideoElement.currentTime).abs() > 0.05) {
         proxy.currentTime = mainVideoElement.currentTime;
       }
     }
@@ -163,9 +164,10 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
   void _syncPlayPauseState(int textureId) {
     final VideoPlayer player = _player(textureId);
     final VideoElement mainVideoElement = player.videoElement;
-    final List<VideoElement> proxies = _proxyVideoElements[textureId] ?? [];
+    final List<VideoElement> proxies =
+        _proxyVideoElements[textureId] ?? <VideoElement>[];
 
-    for (final proxy in proxies) {
+    for (final VideoElement proxy in proxies) {
       if (mainVideoElement.paused && !proxy.paused) {
         proxy.pause();
       } else if (!mainVideoElement.paused && proxy.paused) {
