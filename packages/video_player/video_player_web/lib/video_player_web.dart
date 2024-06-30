@@ -155,7 +155,7 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
         _proxyVideoElements[textureId] ?? <VideoElement>[];
 
     for (final VideoElement proxy in proxies) {
-      if ((proxy.currentTime - mainVideoElement.currentTime).abs() > 0.05) {
+      if ((proxy.currentTime - mainVideoElement.currentTime).abs() > 0.1) {
         proxy.currentTime = mainVideoElement.currentTime;
       }
     }
