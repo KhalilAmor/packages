@@ -22,6 +22,8 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
   // Map of textureId -> list of proxy VideoElements
   final Map<int, List<VideoElement>> _proxyVideoElements =
       <int, List<VideoElement>>{};
+  // Pool of recycled proxy VideoElements
+  final List<VideoElement> _recycledProxyElements = <VideoElement>[];
 
   // Simulate the native "textureId".
   int _textureCounter = 1;
@@ -33,10 +35,16 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
 
   @override
   Future<void> dispose(int textureId) async {
-    _player(textureId).dispose();
-    _videoPlayers.remove(textureId);
-    _proxyVideoElements.remove(textureId);
-    return;
+    final VideoPlayer? player = _videoPlayers[textureId];
+    if (player != null) {
+      for (final VideoElement proxy
+          in _proxyVideoElements[textureId] ?? <VideoElement>[]) {
+        removeProxyElement(textureId, proxy);
+      }
+      player.dispose();
+      _videoPlayers.remove(textureId);
+      _proxyVideoElements.remove(textureId);
+    }
   }
 
   void _disposeAllPlayers() {
@@ -45,6 +53,7 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
     }
     _videoPlayers.clear();
     _proxyVideoElements.clear();
+    _recycledProxyElements.clear();
   }
 
   @override
@@ -105,8 +114,15 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
           return videoElement;
         }
 
-        // Creating the proxy video element
-        final VideoElement proxyVideoElement = VideoElement()
+        // Recycle or create the proxy video element
+        final VideoElement proxyVideoElement = _recycledProxyElements.isNotEmpty
+            ? _recycledProxyElements.removeLast()
+            : VideoElement()
+          ..muted = true
+          ..volume = 0.0
+          ..setAttribute('playsinline', 'true');
+
+        proxyVideoElement
           ..src = videoElement.src
           ..id = 'videoElement-$textureId-proxy-$viewId'
           ..style.border = videoElement.style.border
@@ -115,11 +131,8 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
           ..autoplay = false
           ..controls = videoElement.controls
           ..loop = videoElement.loop
-          ..muted = true // Mute the proxy element
-          ..volume = 0.0 // Ensure volume is set to 0
           ..playbackRate = videoElement.playbackRate
-          ..currentTime = videoElement.currentTime
-          ..setAttribute('playsinline', 'true');
+          ..currentTime = videoElement.currentTime;
 
         // Add the proxy element to the list
         _proxyVideoElements[textureId]!.add(proxyVideoElement);
@@ -140,7 +153,7 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
     final VideoElement mainVideoElement = player.videoElement;
     final List<VideoElement> proxies = _proxyVideoElements[textureId] ?? [];
 
-    for (final VideoElement proxy in proxies) {
+    for (final proxy in proxies) {
       if ((proxy.currentTime - mainVideoElement.currentTime).abs() > 0.1) {
         proxy.currentTime = mainVideoElement.currentTime;
       }
@@ -152,7 +165,7 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
     final VideoElement mainVideoElement = player.videoElement;
     final List<VideoElement> proxies = _proxyVideoElements[textureId] ?? [];
 
-    for (final VideoElement proxy in proxies) {
+    for (final proxy in proxies) {
       if (mainVideoElement.paused && !proxy.paused) {
         proxy.pause();
       } else if (!mainVideoElement.paused && proxy.paused) {
@@ -214,4 +227,23 @@ class VideoPlayerPlugin extends VideoPlayerPlatform {
 
   @override
   Future<void> setMixWithOthers(bool mixWithOthers) => Future<void>.value();
+
+  void removeProxyElement(int textureId, VideoElement proxyVideoElement) {
+    final proxies = _proxyVideoElements[textureId];
+    if (proxies != null) {
+      proxies.remove(proxyVideoElement);
+      proxyVideoElement.pause();
+      _recycledProxyElements.add(proxyVideoElement);
+    }
+  }
+
+  void removeAllProxyElements(int textureId) {
+    final List<VideoElement>? proxies = _proxyVideoElements[textureId];
+    if (proxies != null) {
+      for (final VideoElement proxy in proxies) {
+        removeProxyElement(textureId, proxy);
+      }
+      _proxyVideoElements[textureId]!.clear();
+    }
+  }
 }

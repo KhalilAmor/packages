@@ -192,10 +192,10 @@ class VideoPlayer {
     assert(volume >= 0 && volume <= 1);
 
     final bool muted = !(volume > 0.0);
-    for (final html.VideoElement proxy in _proxyVideoElements) {
-      proxy.muted = muted;
-      proxy.volume = volume;
-    }
+    // for (final html.VideoElement proxy in _proxyVideoElements) {
+    //   proxy.muted = muted;
+    //   proxy.volume = 0.0;
+    // }
     // TODO(ditman): Do we need to expose a "muted" API?
     // https://github.com/flutter/flutter/issues/60721
     _videoElement.muted = muted;
